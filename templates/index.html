@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infrastructure Fatigue Monitoring Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <div class="logo-section">
+        <h1>🏗️ Infrastructure Fatigue Monitoring</h1>
+        <p class="subtitle">Real-time vibration analysis & structural health monitoring</p>
+      </div>
+      <div class="header-status">
+        <span class="last-update">Data Points: {{ stats.total_records }} | Period: {{ stats.date_start }} to {{ stats.date_end }}</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Quick Analysis Form -->
+    <section class="form-section">
+      <h2>Quick Analysis</h2>
+      <form method="POST" class="analysis-form">
+        <div class="form-group">
+          <label for="date">📅 Inspection Date</label>
+          <input id="date" name="date" type="date" value="{{ selected_date }}">
+        </div>
+        <div class="form-group">
+          <label for="vibration">📊 Vibration Value (m/s²)</label>
+          <input id="vibration" name="vibration" type="text" value="{{ input_vibration }}" placeholder="e.g. 0.175">
+        </div>
+        <button type="submit" class="btn-primary">Analyze</button>
+      </form>
+
+      {% if analysis_result %}
+      <div class="result-card">
+        <div class="result-header">
+          <h3>Analysis Result</h3>
+        </div>
+        <div class="result-body">
+          <div class="result-row">
+            <span class="result-label">Date:</span>
+            <span class="result-value">{{ analysis_result.date or "N/A" }}</span>
+          </div>
+          <div class="result-row">
+            <span class="result-label">Vibration:</span>
+            <span class="result-value">{{ analysis_result.vibration }} m/s²</span>
+          </div>
+          <div class="result-row status-row">
+            <span class="result-label">Status:</span>
+            <span class="status-badge {{ analysis_result.status|lower|replace(' ', '-') }}">
+              {{ analysis_result.status }}
+            </span>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- Vibration Trend Chart -->
+    <section class="chart-section">
+      <div class="section-header">
+        <h2>📈 Vibration Trend Analysis</h2>
+        <p class="section-desc">Last 120 data points with fatigue threshold</p>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="vibrationChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Key Metrics -->
+    <section class="metrics-section">
+      <div class="section-header">
+        <h2>📊 Key Metrics</h2>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <span class="metric-icon">📌</span>
+          <h3>Total Records</h3>
+          <p class="metric-value">{{ stats.total_records }}</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-icon">📅</span>
+          <h3>Date Range</h3>
+          <p class="metric-value">{{ stats.date_start[:4] }}-{{ stats.date_end[:4] }}</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-icon">🟢</span>
+          <h3>Safe Status</h3>
+          <p class="metric-value">{{ stats.safe_count }}</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-icon">🟠</span>
+          <h3>Early Fatigue</h3>
+          <p class="metric-value">{{ stats.early_fatigue_count }}</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-icon">🔴</span>
+          <h3>High Risk</h3>
+          <p class="metric-value">{{ stats.high_risk_count }}</p>
+        </div>
+        <div class="metric-card">
+          <span class="metric-icon">📈</span>
+          <h3>Avg Vibration</h3>
+          <p class="metric-value">{{ stats.vib_avg }}</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Monthly Summary -->
+    <section class="table-section">
+      <div class="section-header">
+        <h2>📋 Monthly Analysis Summary</h2>
+        <p class="section-desc">Average vibration and health status by month</p>
+      </div>
+      <div class="table-toolbar">
+        <p class="table-meta">
+          Showing {{ monthly_pagination.start_item }}-{{ monthly_pagination.end_item }} of {{ monthly_pagination.total_items }} months
+        </p>
+        <div class="pagination-controls" aria-label="Monthly analysis pagination">
+          {% if monthly_pagination.has_previous %}
+          <a class="pagination-btn" href="{{ url_for('index', monthly_page=monthly_pagination.previous_page) }}">← Previous</a>
+          {% else %}
+          <span class="pagination-btn disabled">← Previous</span>
+          {% endif %}
+
+          <span class="pagination-status">Page {{ monthly_pagination.current_page }} of {{ monthly_pagination.total_pages }}</span>
+
+          {% if monthly_pagination.has_next %}
+          <a class="pagination-btn" href="{{ url_for('index', monthly_page=monthly_pagination.next_page) }}">Next →</a>
+          {% else %}
+          <span class="pagination-btn disabled">Next →</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Avg Vibration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in monthly_rows %}
+            <tr>
+              <td class="month-cell">{{ row["Month"] }}</td>
+              <td class="vibration-cell">{{ row["Average Vibration"] }}</td>
+              <td class="status-cell">
+                <span class="status-badge {{ row['Status']|lower }}">
+                  {{ row["Status"] }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Recent Data -->
+    <section class="table-section">
+      <div class="section-header">
+        <h2>🔍 Recent Readings</h2>
+        <p class="section-desc">Latest 10 vibration measurements</p>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date & Time</th>
+              <th>Vibration (m/s²)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in recent_rows %}
+            <tr>
+              <td class="date-cell">{{ row["Date"] }}</td>
+              <td class="vibration-cell">{{ row["Vibration"] }}</td>
+              <td class="status-cell">
+                <span class="status-badge {{ row['Status']|lower|replace(' ', '-') }}">
+                  {{ row["Status"] }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Legend & Help -->
+    <section class="legend-section">
+      <h2>📖 Status Legend</h2>
+      <div class="legend-grid">
+        <div class="legend-item">
+          <span class="legend-badge safe">SAFE</span>
+          <div class="legend-text">
+            <strong>Safe Operating Range</strong>
+            <p>Vibration &lt; 0.22 m/s² • No structural concerns</p>
+          </div>
+        </div>
+        <div class="legend-item">
+          <span class="legend-badge early-fatigue">EARLY FATIGUE</span>
+          <div class="legend-text">
+            <strong>Caution Zone</strong>
+            <p>Vibration 0.22-0.30 m/s² • Monitor closely</p>
+          </div>
+        </div>
+        <div class="legend-item">
+          <span class="legend-badge high-risk">HIGH RISK</span>
+          <div class="legend-text">
+            <strong>Critical Alert</strong>
+            <p>Vibration ≥ 0.30 m/s² • Immediate inspection required</p>
+          </div>
+        </div>
+        <div class="legend-item">
+          <span class="legend-badge normal">NORMAL</span>
+          <div class="legend-text">
+            <strong>Monthly Status: Normal</strong>
+            <p>Average vibration &lt; 0.22 m/s²</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; 2026 Infrastructure Monitoring System • Real-time Fatigue Analysis</p>
+  </footer>
+
+  <script id="chart-data" type="application/json">{{ {'labels': chart_labels, 'values': chart_values}|tojson }}</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const chartData = JSON.parse(document.getElementById("chart-data").textContent);
+    const labels = chartData.labels;
+    const values = chartData.values;
+
+    const ctx = document.getElementById("vibrationChart");
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Vibration Level",
+            data: values,
+            borderColor: "#2c3e50",
+            backgroundColor: "rgba(44, 62, 80, 0.05)",
+            borderWidth: 2.5,
+            pointRadius: 2,
+            pointBorderColor: "#2c3e50",
+            pointBackgroundColor: "#fff",
+            pointBorderWidth: 1.5,
+            tension: 0.3,
+            fill: true
+          },
+          {
+            label: "Early Fatigue Threshold (0.22)",
+            data: labels.map(() => 0.22),
+            borderColor: "#e67e22",
+            borderDash: [8, 4],
+            pointRadius: 0,
+            borderWidth: 2,
+            tension: 0
+          },
+          {
+            label: "High Risk Threshold (0.30)",
+            data: labels.map(() => 0.30),
+            borderColor: "#e74c3c",
+            borderDash: [8, 4],
+            pointRadius: 0,
+            borderWidth: 2,
+            tension: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: "top",
+            labels: {
+              font: { size: 12 },
+              padding: 15,
+              boxWidth: 12
+            }
+          },
+          tooltip: {
+            backgroundColor: "rgba(0,0,0,0.8)",
+            padding: 10,
+            titleFont: { size: 13 },
+            bodyFont: { size: 12 },
+            displayColors: true
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 0.35,
+            title: {
+              display: true,
+              text: "Vibration (m/s²)",
+              font: { size: 12, weight: "bold" }
+            },
+            grid: {
+              color: "rgba(0,0,0,0.05)",
+              drawBorder: true
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: "Date",
+              font: { size: 12, weight: "bold" }
+            },
+            ticks: {
+              maxTicksLimit: 14,
+              font: { size: 11 }
+            },
+            grid: {
+              display: false,
+              drawBorder: true
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
