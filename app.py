@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 from math import ceil
 
@@ -19,13 +20,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+app = Flask(
+    __name__,
+    template_folder=str(BASE_DIR / "templates"),
+    static_folder=str(BASE_DIR / "static"),
+)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-key-change-in-production")
 app.config["ENV"] = os.getenv("FLASK_ENV", "development")
 
 DATA_PATH = Path(os.getenv("DATA_PATH", "data/vibration_data.csv"))
 if not DATA_PATH.is_absolute():
-    DATA_PATH = Path(__file__).parent / DATA_PATH
+    DATA_PATH = BASE_DIR / DATA_PATH
 
 logger.info(f"Configured data path: {DATA_PATH}")
 
